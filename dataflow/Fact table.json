@@ -1,0 +1,131 @@
+{
+	"name": "Fact table",
+	"properties": {
+		"type": "MappingDataFlow",
+		"typeProperties": {
+			"sources": [
+				{
+					"dataset": {
+						"referenceName": "order_detail",
+						"type": "DatasetReference"
+					},
+					"name": "salesorderdetail"
+				},
+				{
+					"dataset": {
+						"referenceName": "TARGET_DIM_PRODUCT",
+						"type": "DatasetReference"
+					},
+					"name": "product"
+				}
+			],
+			"sinks": [
+				{
+					"dataset": {
+						"referenceName": "FactOrdes",
+						"type": "DatasetReference"
+					},
+					"name": "FactOrder"
+				}
+			],
+			"transformations": [
+				{
+					"name": "lkpdimproduct"
+				},
+				{
+					"name": "selectfields"
+				},
+				{
+					"name": "newcolumnsdate"
+				},
+				{
+					"name": "fact"
+				},
+				{
+					"name": "UpsertFact"
+				}
+			],
+			"scriptLines": [
+				"source(output(",
+				"          SalesOrderID as integer,",
+				"          orderdate as timestamp,",
+				"          SalesOrderDetailID as integer,",
+				"          OrderQty as short,",
+				"          ProductID as integer,",
+				"          UnitPrice as decimal(19,4),",
+				"          UnitPriceDiscount as decimal(19,4)",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     isolationLevel: 'READ_UNCOMMITTED',",
+				"     query: 'SELECT t1.[SalesOrderID]\\n       , orderdate\\n      ,[SalesOrderDetailID]\\n      ,[OrderQty]\\n      ,[ProductID]\\n      ,[UnitPrice]\\n      ,[UnitPriceDiscount] \\n  FROM [SalesLT].[SalesOrderDetail] t1, [SalesLT].[SalesOrderHeader] t2\\n  where t1.[SalesOrderID] = t2.[SalesOrderID]\\nand orderdate > \\'2009-01-01\\'\\n',",
+				"     format: 'query') ~> salesorderdetail",
+				"source(output(",
+				"          ProductID as integer,",
+				"          SK_PRODUCT as long",
+				"     ),",
+				"     allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     isolationLevel: 'READ_UNCOMMITTED',",
+				"     query: 'SELECT [ProductID]\\n      ,[SK_PRODUCT]\\n  FROM [SalesLT].[DIM_PRODUCT]',",
+				"     format: 'query') ~> product",
+				"salesorderdetail, product lookup(salesorderdetail@ProductID == product@ProductID,",
+				"     multiple: false,",
+				"     pickup: 'any',",
+				"     broadcast: 'auto')~> lkpdimproduct",
+				"lkpdimproduct select(mapColumn(",
+				"          SK_PRODUCT,",
+				"          orderdate,",
+				"          SalesOrderID,",
+				"          SalesOrderDetailID,",
+				"          OrderQty,",
+				"          ProductID = salesorderdetail@ProductID,",
+				"          UnitPrice,",
+				"          UnitPriceDiscount",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> selectfields",
+				"selectfields derive(SK_ORDERDATE = toInteger(toString(orderdate,'yyyyMMdd')),",
+				"          Created_Date = currentTimestamp()) ~> newcolumnsdate",
+				"newcolumnsdate select(mapColumn(",
+				"          SK_ORDERDATE,",
+				"          SK_PRODUCT,",
+				"          orderdate,",
+				"          SalesOrderID,",
+				"          SalesOrderDetailID,",
+				"          OrderQty,",
+				"          ProductID,",
+				"          UnitPrice,",
+				"          UnitPriceDiscount,",
+				"          Created_Date",
+				"     ),",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true) ~> fact",
+				"fact alterRow(insertIf(true())) ~> UpsertFact",
+				"UpsertFact sink(allowSchemaDrift: true,",
+				"     validateSchema: false,",
+				"     deletable:false,",
+				"     insertable:true,",
+				"     updateable:false,",
+				"     upsertable:false,",
+				"     format: 'table',",
+				"     preSQLs:['delete from  [SalesLT].[fact_ordersT]\\nwhere orderdate > \\'2009-01-01\\''],",
+				"     skipDuplicateMapInputs: true,",
+				"     skipDuplicateMapOutputs: true,",
+				"     errorHandlingOption: 'stopOnFirstError',",
+				"     mapColumn(",
+				"          SK_ORDERDATE,",
+				"          SK_PRODUCT,",
+				"          orderdate,",
+				"          SalesOrderID,",
+				"          SalesOrderDetailID,",
+				"          OrderQty,",
+				"          ProductID,",
+				"          UnitPrice,",
+				"          UnitPriceDiscount,",
+				"          Created_date = Created_Date",
+				"     )) ~> FactOrder"
+			]
+		}
+	}
+}

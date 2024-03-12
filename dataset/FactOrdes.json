@@ -1,0 +1,17 @@
+{
+	"name": "FactOrdes",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "AzureSqlDatabase1",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [],
+		"typeProperties": {
+			"schema": "[SalesLT]",
+			"table": "[fact_ordersT]"
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}
